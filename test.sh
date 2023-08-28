@@ -7,8 +7,6 @@ echo $SCRIPTPATH
 # Maximum is currently 30g, configurable in your algorithm image settings on grand challenge
 MEM_LIMIT="4g"
 
-docker volume create bondbidhie2023_algorithm-output-$VOLUME_SUFFIX
-
 # Do not change any of the parameters to docker run, these are fixed
 docker run --rm \
         --memory="${MEM_LIMIT}" \

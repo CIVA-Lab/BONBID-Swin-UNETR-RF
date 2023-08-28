@@ -50,7 +50,7 @@ docker run --rm \
 ```
 But for uploading algorithm docker to the grand challenge server, please use the codes that I provided in test.sh.
 
-```
+```console
 docker run --rm \
         --memory="${MEM_LIMIT}" \
         --memory-swap="${MEM_LIMIT}" \

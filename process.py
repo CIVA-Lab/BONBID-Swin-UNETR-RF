@@ -25,8 +25,6 @@ from typing import Any, Dict, Optional
 import joblib
 import numpy as np
 import SimpleITK
-import torch
-import torch.nn as nn
 from skimage.util.shape import view_as_windows
 
 INPUT_PREFIX = Path('/input')
@@ -40,7 +38,7 @@ class IOKind(str, Enum):
 
 
 class InterfaceKind(str, Enum):
-  # TODO taken from
+  # TODO: taken from
   # https://github.com/comic/grand-challenge.org/blob/ffbae21af534caed9595d9bc48708c5f753b075c/app/grandchallenge/components/models.py#L69
   # would be better to get this directly from the schema
 
@@ -215,26 +213,17 @@ def load() -> Inputs:
   )
 
 
-def get_default_device():
-  '''Set device.'''
-  if torch.cuda.is_available():
-    return torch.device('cuda')
-  else:
-    return torch.device('cpu')
-
-
-class BaseNet(nn.Module):
+class BaseNet(object):
   def __init__(self, save_model_path):
     with open(save_model_path, 'rb') as f:
       self.model = joblib.load(f)
-    super().__init__()
 
   def predict(
       self,
       zadc: np.ndarray,
       adc: Optional[np.ndarray] = None,
       window: int = 5,
-      th: float = 0.2
+      th: float = 0.5
   ) -> np.ndarray:
     '''Predicts using RF and a moving window
 
@@ -249,22 +238,22 @@ class BaseNet(nn.Module):
         zadc, ((0, 0), (window//2, window//2), (window//2, window//2)),
         mode='reflect')
     if adc is not None:
-        adc = np.pad(
-            adc, ((0, 0), (window//2, window//2), (window//2, window//2)),
-            mode='reflect')
+      adc = np.pad(
+          adc, ((0, 0), (window//2, window//2), (window//2, window//2)),
+          mode='reflect')
 
     # Create a list of patches
-    patches = view_as_windows(zadc, (1, window, window))
+    patches_zadc = view_as_windows(zadc, (1, window, window))
     if adc is not None:
-      ptches_ad = view_as_windows(adc, (1, window, window))
+      ptches_adc = view_as_windows(adc, (1, window, window))
 
     if adc is not None:
-      patches = np.concatenate([patches.reshape(-1, window**2),
-                                ptches_ad.reshape(-1, window**2)], axis=1)
+      patches = np.concatenate(
+          [patches_zadc.reshape(-1, window**2),
+           ptches_adc.reshape(-1, window**2)], axis=1)
     else:
-      patches = patches.reshape(-1, window**2)
+      patches = patches_zadc.reshape(-1, window**2)
     # Predict
-    # feats = np.array(patches)
     y = self.model.predict_proba(patches)[:, 1] > th
 
     # Reconstruct the image
@@ -273,31 +262,27 @@ class BaseNet(nn.Module):
                             zadc.shape[2] - window + 1)
     return y.astype('uint8')
 
-  def forward(self, x):
-    out = torch.where(x < -2, 1, 0)
-    return out
-
 
 def predict(*, inputs: Inputs) -> Outputs:
-    z_adc = inputs.z_score_apparent_diffusion_coefficient_map
-    adc_ss = inputs.skull_stripped_adc
-    z_adc = SimpleITK.GetArrayFromImage(z_adc)
-    adc_ss = SimpleITK.GetArrayFromImage(adc_ss)
+  z_adc = inputs.z_score_apparent_diffusion_coefficient_map
+  adc_ss = inputs.skull_stripped_adc
+  z_adc = SimpleITK.GetArrayFromImage(z_adc)
+  adc_ss = SimpleITK.GetArrayFromImage(adc_ss)
 
-    model = BaseNet('./model/RandomForestClassifier-good-one.pkl')
-    out = model.predict(adc_ss, adc_ss)
+  model = BaseNet('./model/RandomForestClassifier-good-one.pkl')
+  out = model.predict(z_adc, adc_ss)
 
-    hie_segmentation = SimpleITK.GetImageFromArray(out)
+  hie_segmentation = SimpleITK.GetImageFromArray(out)
 
-    outputs = Outputs(
-        hypoxic_ischemic_encephalopathy_lesion_segmentation=hie_segmentation
-    )
-    return outputs
+  outputs = Outputs(
+      hypoxic_ischemic_encephalopathy_lesion_segmentation=hie_segmentation
+  )
+  return outputs
 
 
 def save(*, outputs: Outputs) -> None:
-    for interface in OUTPUT_INTERFACES:
-        interface.save(data=getattr(outputs, interface.kwarg))
+  for interface in OUTPUT_INTERFACES:
+    interface.save(data=getattr(outputs, interface.kwarg))
 
 
 def main() -> int:
