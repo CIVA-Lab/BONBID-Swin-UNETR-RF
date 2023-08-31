@@ -11,15 +11,11 @@ WORKDIR /opt/app
 ENV PATH="/home/user/.local/bin:${PATH}"
 
 RUN python -m pip install --user -U pip && python -m pip install --user pip-tools
-
-
-
 COPY --chown=user:user requirements.txt /opt/app/
-COPY --chown=user:user model /opt/app/model
 RUN python -m piptools sync requirements.txt
 
-
-
-COPY --chown=user:user process.py /opt/app/
+COPY --chown=user:user model /opt/app/model
+COPY --chown=user:user configs /opt/app/configs
+COPY --chown=user:user *.py /opt/app/
 
 ENTRYPOINT [ "python", "-m", "process" ]

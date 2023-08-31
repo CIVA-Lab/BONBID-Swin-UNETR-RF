@@ -20,10 +20,13 @@ from dataclasses import dataclass, make_dataclass
 from pathlib import Path
 from typing import Optional
 
-import joblib
 import numpy as np
 import SimpleITK
-from skimage.util.shape import view_as_windows
+import torch
+import yaml
+from monai.inferers import sliding_window_inference
+
+from model import edit_keys, get_model_from_config
 
 INPUT_PREFIX = Path('/input')
 OUTPUT_PREFIX = Path('/output')
@@ -85,10 +88,18 @@ def load() -> Inputs:
   )
 
 
-class BaseNet(object):
-  def __init__(self, save_model_path):
-    with open(save_model_path, 'rb') as f:
-      self.model = joblib.load(f)
+class UNet(object):
+  def __init__(self, config_path, checkpoint):
+    with open(config_path) as f:
+      config = yaml.safe_load(f)
+    self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    self.model = get_model_from_config(config)
+    self.model.to(self.device)
+    state_dict = torch.load(checkpoint, map_location=self.device)
+    # print(state_dict.keys())
+    state_dict = edit_keys(state_dict['state_dict'], ['_model.'], [''])
+    self.model.load_state_dict(state_dict)
+    self.model.eval()
 
   def predict(
       self,
@@ -97,42 +108,13 @@ class BaseNet(object):
       window: int = 5,
       th: float = 0.5
   ) -> np.ndarray:
-    '''Predicts using RF and a moving window
-
-    Args:
-        x (np.ndarray): input image (H, W, D)
-
-    Returns:
-        np.ndarray: predicted image (H, W, D)
-    '''
-    # Pad the image
-    zadc = np.pad(
-        zadc, ((0, 0), (window//2, window//2), (window//2, window//2)),
-        mode='reflect')
-    if adc is not None:
-      adc = np.pad(
-          adc, ((0, 0), (window//2, window//2), (window//2, window//2)),
-          mode='reflect')
-
-    # Create a list of patches
-    patches_zadc = view_as_windows(zadc, (1, window, window))
-    if adc is not None:
-      ptches_adc = view_as_windows(adc, (1, window, window))
-
-    if adc is not None:
-      patches = np.concatenate(
-          [patches_zadc.reshape(-1, window**2),
-           ptches_adc.reshape(-1, window**2)], axis=1)
-    else:
-      patches = patches_zadc.reshape(-1, window**2)
-    # Predict
-    y = self.model.predict_proba(patches)[:, 1] > th
-
-    # Reconstruct the image
-    y = np.array(y).reshape(zadc.shape[0],
-                            zadc.shape[1] - window + 1,
-                            zadc.shape[2] - window + 1)
-    return y.astype('uint8')
+    '''Predicts using RF and a moving window.'''
+    # Add Batch + channel
+    x = torch.tensor(zadc).unsqueeze(0).unsqueeze(0).to(self.device)
+    out = sliding_window_inference(
+      x, (128, 128, 32), 4, self.model, overlap=0.5)[0]
+    out = out.detach().cpu().argmax(dim=0).numpy()
+    return out.astype('uint8')
 
 
 def predict(*, inputs: Inputs) -> Outputs:
@@ -141,8 +123,10 @@ def predict(*, inputs: Inputs) -> Outputs:
   z_adc = SimpleITK.GetArrayFromImage(z_adc)
   adc_ss = SimpleITK.GetArrayFromImage(adc_ss)
 
-  model = BaseNet('./model/RandomForestClassifier-good-one.pkl')
-  out = model.predict(z_adc, adc_ss)
+  model = UNet(
+    './configs/bonbid_unet.yml',
+    './model/best_bonbid_unet-epoch=737-val_dice=0.77.ckpt')
+  out = model.predict(z_adc)
 
   hie_segmentation = SimpleITK.GetImageFromArray(out)
 
