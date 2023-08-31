@@ -37,4 +37,4 @@ else
     echo "Expected output was not found..."
 fi
 
-docker volume rm bondbidhie2023_algorithm-output-$VOLUME_SUFFIX
+# docker volume rm bondbidhie2023_algorithm-output-$VOLUME_SUFFIX
