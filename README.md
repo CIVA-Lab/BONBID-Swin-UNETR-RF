@@ -6,6 +6,54 @@ bondbidhie2023_algorithm, generated with
 evalutils version 0.4.2
 using Python 3.8.
 
+## Before cloning
+This project uses Git Large File Storage (LFS) to handle large files. To work with this repository properly, you'll need to have Git LFS installed and set up. Here's how:
+
+### 1. Install Git LFS
+
+First, ensure you have Git LFS installed. If not, download and install it from [https://git-lfs.github.com/](https://git-lfs.github.com/).
+
+### 2. Clone the Repository
+
+If you haven't cloned the repository yet, you can do so with:
+
+```bash
+git clone <repository-url>
+```
+
+If you've already cloned the repository before installing Git LFS, navigate to your repository and pull the LFS files:
+
+```bash
+git lfs install
+git lfs pull
+```
+
+### 3. Track Large Files
+
+If you're a contributor and need to add new large files:
+
+1. Make sure the file types you want to track are set up with Git LFS. You can see which file types are currently being tracked with:
+
+   ```bash
+   git lfs track
+   ```
+
+2. If your file type isn't being tracked, you can set it up with:
+
+   ```bash
+   git lfs track "*.your-file-extension"
+   ```
+
+   Replace `your-file-extension` with the appropriate extension (e.g., `*.psd` for Photoshop files).
+
+3. Commit the `.gitattributes` file, which contains the tracking configurations:
+
+   ```bash
+   git add .gitattributes
+   git commit -m "Track <filetype> files with Git LFS"
+   ```
+
+## Run with Docker
 
 Before running, you will need a local docker installation.
 For more details, please read grand-challenge documents [https://grand-challenge.org/documentation/automated-evaluation/](https://grand-challenge.org/documentation/creating-an-algorithm-container/) and [https://comic.github.io/evalutils/usage.html](https://comic.github.io/evalutils/usage.html#algorithm-container) 
@@ -27,7 +75,7 @@ Please follow these steps to run it on the local machine.
   ```console
    ./build.sh
   ```
-2. Test the docker
+1. Test the docker
   ```console
   ./test.sh
   ```
