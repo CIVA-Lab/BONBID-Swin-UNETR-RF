@@ -1,0 +1,24 @@
+- LoadImaged:
+    keys: ["adc_ss", "z_adc"]
+
+- EnsureChannelFirstd:
+    keys: ["adc_ss", "z_adc"]
+
+- Spacingd:
+    keys: ["adc_ss", "z_adc"]
+    pixdim: [1.0, 1.0, 1.0]
+    mode: ["bilinear", "bilinear"]
+
+- ConcatItemsd:
+    keys: ["adc_ss", "z_adc"]
+    name: "image"
+    dim: 0
+
+- DeleteItemsd:
+    keys: ["adc_ss", "z_adc"]
+
+- NormalizeIntensityd:
+    keys: ["image"]
+    subtrahend: [1350.2510, 0.3467]
+    divisor: [428.1346, 2.4878]
+    channel_wise: True

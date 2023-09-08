@@ -4,21 +4,23 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 echo $SCRIPTPATH
 ./build.sh
 
-# Maximum is currently 30g, configurable in your algorithm image settings on grand challenge
-MEM_LIMIT="4g"
+# Maximum is currently 30g, configurable in your algorithm image settings
+# on grand challenge
+MEM_LIMIT="32g"
 
 # Do not change any of the parameters to docker run, these are fixed
 docker run --rm \
-        --memory="${MEM_LIMIT}" \
-        --memory-swap="${MEM_LIMIT}" \
-        --network="none" \
-        --cap-drop="ALL" \
-        --security-opt="no-new-privileges" \
-        --shm-size="128m" \
-        --pids-limit="256" \
-        -v $SCRIPTPATH/test:/input/ \
-        -v $SCRIPTPATH/output:/output/ \
-        bondbidhie2023_algorithm
+    --gpus='"device=0"' \
+    --memory="${MEM_LIMIT}" \
+    --memory-swap="${MEM_LIMIT}" \
+    --network="none" \
+    --cap-drop="ALL" \
+    --security-opt="no-new-privileges" \
+    --shm-size="128m" \
+    --pids-limit="256" \
+    -v=$SCRIPTPATH/test:/input/ \
+    -v=$SCRIPTPATH/output:/output/ \
+    bondbidhie2023_algorithm
 
 
 

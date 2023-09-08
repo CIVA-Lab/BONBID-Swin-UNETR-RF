@@ -1,0 +1,5 @@
+- AsDiscrete:
+    argmax: True
+
+- RemoveSmallObjects:
+    min_size: 10

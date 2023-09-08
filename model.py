@@ -1,17 +1,15 @@
-# from: https://gitlab.missouri.edu/CIVALab/3d-segmentation-monai/-/blob/gani-update/model.py
+# from:
+# https://gitlab.missouri.edu/CIVALab/3d-segmentation-monai/-/blob/gani-update/model.py
 # hash: 2c45f6ed
 
 from typing import Sequence
 
 import torch
-import torch.multiprocessing
 import yaml
 from monai.networks import nets
 
-torch.multiprocessing.set_sharing_strategy('file_system')
 
-
-def get_model_config(model_config_path: str) -> dict:
+def get_config(model_config_path: str) -> dict:
     with open(model_config_path, 'r') as stream:
         config = yaml.safe_load(stream)
     return config

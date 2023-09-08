@@ -97,7 +97,6 @@ wheel==0.40.0
     # via pip-tools
 torchio==0.18.92
 scikit-image
-# The following packages are considered to be unsafe in a requirements file:
-# pip
-# setuptools
 monai
+itk
+einops

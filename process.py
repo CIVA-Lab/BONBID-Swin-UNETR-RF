@@ -18,18 +18,21 @@
 
 from dataclasses import dataclass, make_dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-import SimpleITK
 import torch
 import yaml
+from monai.data import image_writer
 from monai.inferers import sliding_window_inference
+from monai.transforms import Compose, Spacing
 
 from model import edit_keys, get_model_from_config
+from transforms import get_transform_from_config
 
 INPUT_PREFIX = Path('/input')
 OUTPUT_PREFIX = Path('/output')
+
+FORCE_CUDA = True
 
 
 @dataclass
@@ -43,7 +46,7 @@ class Interface:
 
     if len(mha_files) == 1:
       mha_file = mha_files.pop()
-      return SimpleITK.ReadImage(mha_file)
+      return mha_file
     elif len(mha_files) > 1:
       raise RuntimeError(
           f'More than one mha file was found in {input_directory!r}'
@@ -55,7 +58,11 @@ class Interface:
     output_directory = OUTPUT_PREFIX / self.relative_path
     output_directory.mkdir(exist_ok=True, parents=True)
     file_save_name = output_directory / 'overlay.mha'
-    SimpleITK.WriteImage(data, file_save_name)
+
+    writer = image_writer.ITKWriter(output_dtype=np.uint8)
+    writer.set_data_array(data['data'], channel_dim=None)
+    writer.set_metadata(data['meta'])
+    writer.write(file_save_name)
 
 
 INPUT_INTERFACES = [
@@ -88,47 +95,60 @@ def load() -> Inputs:
   )
 
 
-class UNet(object):
+class Net(object):
   def __init__(self, config_path, checkpoint):
     with open(config_path) as f:
       config = yaml.safe_load(f)
-    self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    if FORCE_CUDA or torch.cuda.is_available():
+      self.device = 'cuda:0'
+    else:
+      self.device = 'cpu'
     self.model = get_model_from_config(config)
     self.model.to(self.device)
     state_dict = torch.load(checkpoint, map_location=self.device)
-    # print(state_dict.keys())
     state_dict = edit_keys(state_dict['state_dict'], ['_model.'], [''])
     self.model.load_state_dict(state_dict)
     self.model.eval()
 
-  def predict(
-      self,
-      zadc: np.ndarray,
-      adc: Optional[np.ndarray] = None,
-      window: int = 5,
-      th: float = 0.5
-  ) -> np.ndarray:
+  def predict(self, x: torch.Tensor) -> torch.Tensor:
     '''Predicts using RF and a moving window.'''
     # Add Batch + channel
-    x = torch.tensor(zadc).unsqueeze(0).unsqueeze(0).to(self.device)
-    out = sliding_window_inference(
-      x, (128, 128, 32), 4, self.model, overlap=0.5)[0]
-    out = out.detach().cpu().argmax(dim=0).numpy()
-    return out.astype('uint8')
+    with torch.no_grad():
+      x = x.to(self.device)
+      out = sliding_window_inference(
+          x, (128, 128, 128), 1, self.model, overlap=0,
+          device=self.device, sw_device=self.device)[0]
+    return out
 
 
 def predict(*, inputs: Inputs) -> Outputs:
-  z_adc = inputs.z_score_apparent_diffusion_coefficient_map
-  adc_ss = inputs.skull_stripped_adc
-  z_adc = SimpleITK.GetArrayFromImage(z_adc)
-  adc_ss = SimpleITK.GetArrayFromImage(adc_ss)
+  transform = get_transform_from_config('configs/transform.yml')
 
-  model = UNet(
-    './configs/bonbid_unet.yml',
-    './model/best_bonbid_unet-epoch=737-val_dice=0.77.ckpt')
-  out = model.predict(z_adc)
+  input = transform({
+      'z_adc': inputs.z_score_apparent_diffusion_coefficient_map,
+      'adc_ss': inputs.skull_stripped_adc
+  })
 
-  hie_segmentation = SimpleITK.GetImageFromArray(out)
+  model = Net(
+      './configs/bonbid_swinunetr.yml',
+      './model/bonbid_swin_unetr_48_data-50-50-split-dice-clip-5.0.ckpt')
+  x = input['image'].unsqueeze(0)
+
+  out = model.predict(x)
+  out = out.detach().cpu()
+  output_transform = Compose([
+    get_transform_from_config('configs/output_transform.yml'),
+    Spacing(
+      input['z_adc_meta_dict']['spacing'],
+      mode='nearest')
+  ])
+
+  out = output_transform(out)[0]
+  out = out.numpy().astype('uint8')
+  hie_segmentation = {
+    'data': out,
+    'meta': input['z_adc_meta_dict']
+  }
 
   outputs = Outputs(
       hypoxic_ischemic_encephalopathy_lesion_segmentation=hie_segmentation

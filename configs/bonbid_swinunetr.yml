@@ -1,0 +1,8 @@
+model: SwinUNETR
+
+args:
+  img_size: [128, 128, 128]
+  in_channels: 2
+  out_channels: 2
+  feature_size: 24
+  normalize: False

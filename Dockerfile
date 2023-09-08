@@ -1,4 +1,4 @@
-FROM python:3.8-slim
+FROM python:3.10-slim
 
 RUN groupadd -r user && useradd -m --no-log-init -r -g user user
 
