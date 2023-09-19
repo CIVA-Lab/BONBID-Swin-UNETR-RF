@@ -1,10 +1,5 @@
-# bondbidhie2023_algorithm Algorithm Docker
-Prepared by Rina Bao, 7/12/2023
-
-The source code for the algorithm container for
-bondbidhie2023_algorithm, generated with
-evalutils version 0.4.2
-using Python 3.8.
+# Deep and Local Features Segmentation Algorithm Docker
+Prepared by Imad Toubal, 9/20/2023
 
 ## Before cloning
 This project uses Git Large File Storage (LFS) to handle large files. To work with this repository properly, you'll need to have Git LFS installed and set up. Here's how:
@@ -27,31 +22,6 @@ If you've already cloned the repository before installing Git LFS, navigate to y
 git lfs install
 git lfs pull
 ```
-
-### 3. Track Large Files
-
-If you're a contributor and need to add new large files:
-
-1. Make sure the file types you want to track are set up with Git LFS. You can see which file types are currently being tracked with:
-
-   ```bash
-   git lfs track
-   ```
-
-2. If your file type isn't being tracked, you can set it up with:
-
-   ```bash
-   git lfs track "*.your-file-extension"
-   ```
-
-   Replace `your-file-extension` with the appropriate extension (e.g., `*.psd` for Photoshop files).
-
-3. Commit the `.gitattributes` file, which contains the tracking configurations:
-
-   ```bash
-   git add .gitattributes
-   git commit -m "Track <filetype> files with Git LFS"
-   ```
 
 ## Run with Docker
 
@@ -113,3 +83,11 @@ docker run --rm \
 ```
 3. Exporting docker ./export.sh 
 Running ./export.sh, and submitting the generated zip file of the algorithm docker.
+
+## References
+1. Original repository by [Rina Bao](https://github.com/baorina): https://github.com/baorina/BONBID-HIE-MICCAI2023
+2. [Challanege website](https://bonbid-hie2023.grand-challenge.org/bonbid-hie2023/)
+3. [Dataset download](https://zenodo.org/record/8104103)
+4. [Preprint challenge paper](https://www.biorxiv.org/content/10.1101/2023.06.30.546841v1.abstract)
+5. [MONAI](https://github.com/Project-MONAI/MONAI)
+6. [Hausdorff Loss](https://arxiv.org/abs/1904.10030)
