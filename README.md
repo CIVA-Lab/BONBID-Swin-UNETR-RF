@@ -23,6 +23,16 @@ git lfs install
 git lfs pull
 ```
 
+## Run without docker
+1. Install requirements
+   ```sh
+   pip install -r requirements.txt
+   ```
+2. The following command will give print how to use the script to generate results:
+   ```sh
+   python process.py --help
+   ```
+
 ## Run with Docker
 
 Before running, you will need a local docker installation.
@@ -42,44 +52,44 @@ Please follow these steps to run it on the local machine.
 
 
 1. Build the docker
-  ```console
-   ./build.sh
+  ```sh
+  ./build.sh
   ```
 1. Test the docker
-  ```console
+  ```sh
   ./test.sh
   ```
 
 In test.sh, use the following command in order to generate the results locally
 and test your codes:
 
-```console
+```sh
 docker run --rm \
-        --memory="${MEM_LIMIT}" \
-        --memory-swap="${MEM_LIMIT}" \
-        --network="none" \
-        --cap-drop="ALL" \
-        --security-opt="no-new-privileges" \
-        --shm-size="128m" \
-        --pids-limit="256" \
-        -v $SCRIPTPATH/test/:/input/ \
-        -v $SCRIPTPATH/output/:/output/ \
-        bondbidhie2023_algorithm
+    --memory="${MEM_LIMIT}" \
+    --memory-swap="${MEM_LIMIT}" \
+    --network="none" \
+    --cap-drop="ALL" \
+    --security-opt="no-new-privileges" \
+    --shm-size="128m" \
+    --pids-limit="256" \
+    -v $SCRIPTPATH/test/:/input/ \
+    -v $SCRIPTPATH/output/:/output/ \
+    bondbidhie2023_algorithm
 ```
 But for uploading algorithm docker to the grand challenge server, please use the codes that I provided in test.sh.
 
-```console
+```sh
 docker run --rm \
-        --memory="${MEM_LIMIT}" \
-        --memory-swap="${MEM_LIMIT}" \
-        --network="none" \
-        --cap-drop="ALL" \
-        --security-opt="no-new-privileges" \
-        --shm-size="128m" \
-        --pids-limit="256" \
-        -v $SCRIPTPATH/test/:/input/ \
-        -v bondbidhie2023_algorithm-output-$VOLUME_SUFFIX:/output/ \
-        bondbidhie2023_algorithm
+    --memory="${MEM_LIMIT}" \
+    --memory-swap="${MEM_LIMIT}" \
+    --network="none" \
+    --cap-drop="ALL" \
+    --security-opt="no-new-privileges" \
+    --shm-size="128m" \
+    --pids-limit="256" \
+    -v $SCRIPTPATH/test/:/input/ \
+    -v bondbidhie2023_algorithm-output-$VOLUME_SUFFIX:/output/ \
+    bondbidhie2023_algorithm
 ```
 3. Exporting docker ./export.sh 
 Running ./export.sh, and submitting the generated zip file of the algorithm docker.

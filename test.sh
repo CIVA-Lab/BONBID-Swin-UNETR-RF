@@ -10,7 +10,7 @@ MEM_LIMIT="32g"
 
 # Do not change any of the parameters to docker run, these are fixed
 docker run --rm \
-    --gpus='"device=0"' \
+    --gpus='"device=2"' \
     --memory="${MEM_LIMIT}" \
     --memory-swap="${MEM_LIMIT}" \
     --network="none" \

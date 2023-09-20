@@ -1,4 +1,4 @@
-import warnings
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -11,35 +11,25 @@ from evalutils.io import SimpleITKLoader
 from monai.data import image_writer
 from monai.inferers import sliding_window_inference
 from monai.transforms import Compose, Spacing
+from skimage.morphology import remove_small_objects
 from skimage.util.shape import view_as_windows
 
 from model import edit_keys, get_model_from_config
 from transforms import get_transform_from_config
 
-INPUT_PREFIX = Path('/input')
-INPUT_ZADC_DIR = 'images/z-score-adc'
-INPUT_ADC_SS_DIR = 'images/skull-stripped-adc-brain-mri'
-
-OUTPUT_PREFIX = Path('/output')
-OUTPUT_LESION_DIR = 'images/hie-lesion-segmentation'
-OUTPUT_FILENAME = 'overlay.mha'
-
-# Change with 2-channel 2-output MONAI model.
-NET_CFG = 'configs/bonbid_swinunetr.yml'
-NET_CKPT = 'model/bonbid_swin_unetr_48_data-50-50-split-dice-clip-5.0.ckpt'
-RF_CKPT = 'model/RandomForestClassifier.pkl'
-
-INPUT_TRANSFORM = 'configs/transform.yml'
-OUTPUT_TRANSFORM = 'configs/output_transform.yml'
-
-FORCE_CUDA = True
-
 
 class Net(object):
-  def __init__(self, config_path, checkpoint, rf_checkpoint):
+  def __init__(
+      self,
+      config_path,
+      checkpoint,
+      rf_checkpoint,
+      input_transform,
+      force_cuda=False
+  ) -> None:
     with open(config_path) as f:
       config = yaml.safe_load(f)
-    if FORCE_CUDA or torch.cuda.is_available():
+    if force_cuda or torch.cuda.is_available():
       self.device = 'cuda:0'
     else:
       self.device = 'cpu'
@@ -50,7 +40,7 @@ class Net(object):
     self.model.load_state_dict(state_dict)
     self.model.eval()
 
-    self.transform = get_transform_from_config(INPUT_TRANSFORM)
+    self.transform = get_transform_from_config(input_transform)
     self.rf = joblib.load(rf_checkpoint)
 
   def _load_mha(self, path):
@@ -81,16 +71,20 @@ class Net(object):
     ])
     out = torch.nn.functional.softmax(output_transform(out), dim=0)[1].numpy()
     out = out.transpose(2, 1, 0)
-    warnings.warn(str(out.shape))
+
     return out, inputs['z_adc_meta_dict']
 
   def predict(self, inputs, window=5, th=0.5):
-    pr, meta = self._deep_predict(inputs)
     zadc = inputs['z_adc']
     adc = inputs['adc_ss']
+    pr, meta = self._deep_predict(inputs)
 
     x, _ = self._load_mha(zadc)
     ad, _ = self._load_mha(adc)
+    padded_pr = np.zeros(x.shape, pr.dtype)
+
+    padded_pr[:pr.shape[0], :pr.shape[1], :pr.shape[2]] = pr
+    pr = padded_pr
 
     x = np.pad(x, ((0, 0), (window//2, window//2), (window//2, window//2)),
                mode='reflect')
@@ -120,24 +114,79 @@ class Net(object):
 
 
 def main() -> int:
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--input_zadc_dir', type=str,
+      default='/input/images/z-score-adc')
+  parser.add_argument(
+      '--input_adc_ss_dir', type=str,
+      default='/input/images/skull-stripped-adc-brain-mri')
+  parser.add_argument(
+      '--output_dir', type=str,
+      default='/output/images/hie-lesion-segmentation')
+  parser.add_argument(
+      '--output_filename', type=str,
+      default='overlay.mha')
+  parser.add_argument(
+      '--net_cfg', type=str,
+      default='configs/bonbid_swinunetr.yml')
+  parser.add_argument(
+      '--net_ckpt', type=str,
+      default='model/bonbid_swin_unetr_48_no-empty-overfit-48-dice+loghaus-lr=0.0001.ckpt')
+  parser.add_argument(
+      '--rf_ckpt', type=str,
+      default='model/RandomForestClassifier.pkl')
+  parser.add_argument(
+      '--input_transform', type=str,
+      default='configs/transform.yml')
+  parser.add_argument(
+      '--many', action='store_true', help='Whether to process many files')
+  parser.add_argument(
+      '--force_cuda', type=str, default=True)
+  args = parser.parse_args()
 
   # Trailing comma insures there is exactly one volume.
-  zadc, = list((INPUT_PREFIX / INPUT_ZADC_DIR).glob('*.mha'))
-  adc_ss, = list((INPUT_PREFIX / INPUT_ADC_SS_DIR).glob('*.mha'))
+  zadcs: list[Path] = list(Path(args.input_zadc_dir).glob('*.mha'))
+  adc_sss: list[Path] = list(Path(args.input_adc_ss_dir).glob('*.mha'))
 
-  # Prediction.
-  model = Net(NET_CFG, NET_CKPT, RF_CKPT)
-  output, meta = model.predict({'z_adc': zadc, 'adc_ss': adc_ss})
-  output = output.astype(np.uint8)
+  assert len(zadcs) == len(adc_sss), f"found {len(zadcs)=} != {len(adc_sss)=}"
+  if not args.many and len(zadcs) != 1:
+    raise ValueError('Expecting a single image. If you need to process many '
+                     'images, please pass the `--many` flag')
+  zadcs.sort()
+  adc_sss.sort()
 
-  output_directory = OUTPUT_PREFIX / OUTPUT_LESION_DIR
-  output_directory.mkdir(exist_ok=True, parents=True)
-  file_save_name = output_directory / OUTPUT_FILENAME
+  for zadc, adc_ss in zip(zadcs, adc_sss):
+    # Prediction.
+    model = Net(
+        args.net_cfg,
+        args.net_ckpt,
+        args.rf_ckpt,
+        args.input_transform,
+        args.force_cuda
+    )
+    output, meta = model.predict({'z_adc': zadc, 'adc_ss': adc_ss})
+    pp_output = []
+    for slice in output:
+      pp_slice = remove_small_objects(slice, min_size=5)
+      pp_output.append(pp_slice)
+    output = np.stack(pp_output)
+    output = output.astype(np.uint8)
 
-  writer = image_writer.ITKWriter(output_dtype=np.uint8)
-  writer.set_data_array(output, channel_dim=None)
-  writer.set_metadata(meta)
-  writer.write(file_save_name)
+    output_directory = Path(args.output_dir)
+    output_directory.mkdir(exist_ok=True, parents=True)
+    if args.many:
+      # Ex: MGHNICU_010-VISIT_01-ADC_ss.mha -> MGHNICU_010-VISIT_01_lesion.mha
+      output_filename = adc_ss.name.replace('-ADC_ss', '_lesion')
+    else:
+      output_filename = args.output_filename
+
+    file_save_name = output_directory / output_filename
+
+    writer = image_writer.ITKWriter(output_dtype=np.uint8)
+    writer.set_data_array(output, channel_dim=None)
+    writer.set_metadata(meta)
+    writer.write(file_save_name)
 
   return 0
 

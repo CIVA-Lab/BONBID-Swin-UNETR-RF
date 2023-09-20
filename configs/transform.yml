@@ -1,5 +1,6 @@
 - LoadImaged:
     keys: ["adc_ss", "z_adc"]
+    image_only: False
 
 - EnsureChannelFirstd:
     keys: ["adc_ss", "z_adc"]
